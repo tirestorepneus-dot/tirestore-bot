@@ -4,16 +4,16 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A");
+
 const app = express();
 app.use(express.json());
 
-// Pega as variáveis do Railway ou do .env local
 const PORT = process.env.PORT || 8080;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-// LOG DE DIAGNÓSTICO: Isso vai aparecer no seu Deploy Log do Railway
 console.log("=== Configuração do Bot ===");
 console.log("Porta:", PORT);
 console.log("Verify Token configurado:", VERIFY_TOKEN ? "SIM ✅" : "NÃO ❌");
@@ -21,9 +21,8 @@ console.log("WhatsApp Token configurado:", WHATSAPP_TOKEN ? "SIM ✅" : "NÃO �
 console.log("Phone ID:", PHONE_NUMBER_ID);
 console.log("===========================");
 
-// Teste se o servidor está vivo
 app.get("/", (req, res) => {
-  res.send("TireStore BOT rodando 🚀");
+  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅");
 });
 
 // Verificação do webhook (Meta)
@@ -45,11 +44,36 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
+// Enviar texto simples
+async function sendText(to, text) {
+  try {
+    const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
+
+    await axios.post(
+      url,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: text },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("ERRO AO ENVIAR TEXTO:", error.response?.data || error.message);
+  }
+}
+
 // Enviar menu
 async function sendMenu(to) {
   try {
     const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
-    
+
     console.log(`Enviando menu para: ${to}`);
 
     await axios.post(
@@ -60,8 +84,13 @@ async function sendMenu(to) {
         type: "interactive",
         interactive: {
           type: "list",
-          header: { type: "text", text: "TireStore 🛞" },
-          body: { text: "Como podemos te ajudar?" },
+          header: { type: "text", text: "TireStore" },
+          body: {
+            text:
+              "MENU NOVO — 2026-02-04 A ✅\n\n" +
+              "Olá! Somos a TireStore 🛞\n" +
+              "Me diga o que você está buscando:",
+          },
           footer: { text: "Escolha uma opção" },
           action: {
             button: "Ver opções",
@@ -74,20 +103,21 @@ async function sendMenu(to) {
                   { id: "track", title: "Rastreamento", description: "Acompanhar pedido" },
                   { id: "return", title: "Troca ou devolução", description: "Solicitar troca" },
                   { id: "warranty", title: "Garantia", description: "Abrir chamado" },
-                  { id: "cancel", title: "Cancelamento", description: "Cancelar pedido" }
-                ]
-              }
-            ]
-          }
-        }
+                  { id: "cancel", title: "Cancelamento", description: "Cancelar pedido" },
+                ],
+              },
+            ],
+          },
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       }
     );
+
     console.log("Menu enviado com sucesso! 📤");
   } catch (error) {
     console.error("ERRO AO ENVIAR MENU:", error.response?.data || error.message);
@@ -97,70 +127,40 @@ async function sendMenu(to) {
 // Receber mensagens
 app.post("/webhook", async (req, res) => {
   const body = req.body;
-
-  // Log para ver o que a Meta está enviando exatamente
   console.log("Webhook recebido: ", JSON.stringify(body, null, 2));
 
-  if (body.object === "whatsapp_business_account") {
-    const msg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  if (body.object !== "whatsapp_business_account") return res.sendStatus(404);
 
-    if (msg) {
-      const from = msg.from;
-      const text = msg.text?.body;
+  const msg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  if (!msg) return res.sendStatus(200);
 
-      console.log("Mensagem detectada de:", from, "| Texto:", text);
+  const from = msg.from;
+  const type = msg.type;
 
-      if (text) {
-        await sendMenu(from);
-      }
-    }
+  console.log("Mensagem detectada de:", from, "| Tipo:", type);
+
+  if (type === "text") {
+    await sendMenu(from);
     return res.sendStatus(200);
   }
 
-  res.sendStatus(404);
-});
-app.get("/test", async (req, res) => {
-  try {
-    const to = "5511971800604"; // 👈 SEU número aqui (com 55 e DDD)
+  if (type === "interactive") {
+    const choice =
+      msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
 
-    const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
+    console.log("Cliente clicou:", choice);
 
-    await axios.post(
-      url,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "template",
-        template: {
-          name: "jaspers_market_order_confirmation_v1",
-          language: { code: "en_US" },
-          components: [
-            {
-              type: "body",
-              parameters: [
-                { type: "text", text: "Cliente Tirestore" },
-                { type: "text", text: "987654" },
-                { type: "text", text: "Hoje" }
-              ]
-            }
-          ]
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
+    if (choice === "buy") {
+      await sendText(from, "Show! Me mande a medida do pneu.");
+    } else {
+      await sendText(from, "Opção recebida: " + choice);
+    }
 
-    res.send("Mensagem enviada para seu WhatsApp ✅");
-  } catch (e) {
-    console.log(e.response?.data || e.message);
-    res.send("Erro ao enviar ❌");
+    return res.sendStatus(200);
   }
-});
 
+  return res.sendStatus(200);
+});
 
 app.listen(PORT, () => {
   console.log("Servidor ativo e aguardando na porta", PORT);

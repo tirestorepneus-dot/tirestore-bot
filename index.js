@@ -2,6 +2,7 @@ import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
 import * as cheerio from "cheerio";
+import puppeteer from "puppeteer"; // ✅ ADICIONADO
 
 dotenv.config();
 
@@ -79,9 +80,7 @@ async function sendMenu(to) {
           type: "list",
           header: { type: "text", text: "TireStore" },
           body: {
-            text:
-              "Olá! Somos a TireStore 🛞\n\n" +
-              "Como podemos te ajudar hoje?",
+            text: "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?",
           },
           footer: { text: "Escolha uma opção" },
           action: {
@@ -156,9 +155,7 @@ function extractProductsFromHtml(html) {
       href.includes("/product") ||
       href.toLowerCase().includes("sku");
 
-    if (looksLikeProduct) {
-      candidates.push({ href, name });
-    }
+    if (looksLikeProduct) candidates.push({ href, name });
   });
 
   const seen = new Set();
@@ -172,7 +169,6 @@ function extractProductsFromHtml(html) {
     if (seen.has(url)) continue;
     seen.add(url);
 
-    // tenta achar preço perto do link
     const a = $(`a[href="${c.href}"]`).first();
     const blockText = a.parent().text().replace(/\s+/g, " ").trim();
     const m = blockText.match(/R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}/);
@@ -185,6 +181,58 @@ function extractProductsFromHtml(html) {
   }
 
   return products;
+}
+
+// ✅ FALLBACK: usa navegador (Puppeteer) se o HTML vier “vazio”
+async function fetchProductsWithPuppeteer(searchUrl) {
+  const browser = await puppeteer.launch({
+    headless: "new",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    );
+
+    await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 60000 });
+    await page.waitForTimeout(5000);
+
+    const products = await page.evaluate(() => {
+      const out = [];
+      const seen = new Set();
+
+      const anchors = Array.from(document.querySelectorAll("a[href]"));
+
+      for (const a of anchors) {
+        const url = a.href;
+        const name = (a.innerText || "").replace(/\s+/g, " ").trim();
+        if (!url || !name || name.length < 8) continue;
+
+        const block =
+          a.closest("article")?.innerText ||
+          a.closest("li")?.innerText ||
+          a.parentElement?.innerText ||
+          "";
+
+        const m = block.match(/R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}/);
+        if (!m) continue;
+
+        if (seen.has(url)) continue;
+        seen.add(url);
+
+        out.push({ name, url, price: m[0] });
+        if (out.length >= 6) break;
+      }
+
+      return out;
+    });
+
+    return products;
+  } finally {
+    await browser.close();
+  }
 }
 
 function formatBudget(size, products, searchUrl) {
@@ -219,12 +267,10 @@ app.post("/webhook", async (req, res) => {
   const from = msg.from;
   const type = msg.type;
 
-  // Mensagem de texto
   if (type === "text") {
     const text = (msg.text?.body || "").trim();
     const session = sessions.get(from);
 
-    // Se estiver esperando medida, gerar orçamento
     if (session?.step === "WAIT_SIZE") {
       sessions.delete(from);
 
@@ -233,7 +279,13 @@ app.post("/webhook", async (req, res) => {
 
       try {
         const html = await fetchHtml(searchUrl);
-        const products = extractProductsFromHtml(html);
+        let products = extractProductsFromHtml(html);
+
+        // ✅ se vier vazio, tenta Puppeteer
+        if (!products.length) {
+          console.log("Nada no HTML, tentando Puppeteer...");
+          products = await fetchProductsWithPuppeteer(searchUrl);
+        }
 
         await sendText(from, formatBudget(size, products, searchUrl));
         return res.sendStatus(200);
@@ -247,12 +299,10 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // Se não está esperando medida, manda o menu
     await sendMenu(from);
     return res.sendStatus(200);
   }
 
-  // Clique no menu
   if (type === "interactive") {
     const choice =
       msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;

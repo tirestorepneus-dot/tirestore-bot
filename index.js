@@ -2,7 +2,7 @@ import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
 import * as cheerio from "cheerio";
-import puppeteer from "puppeteer"; // ✅ ADICIONADO
+import puppeteer from "puppeteer";
 
 dotenv.config();
 
@@ -183,11 +183,18 @@ function extractProductsFromHtml(html) {
   return products;
 }
 
-// ✅ FALLBACK: usa navegador (Puppeteer) se o HTML vier “vazio”
+// ✅ Puppeteer (Railway-friendly)
 async function fetchProductsWithPuppeteer(searchUrl) {
   const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--single-process",
+      "--no-zygote",
+    ],
   });
 
   try {
@@ -197,7 +204,7 @@ async function fetchProductsWithPuppeteer(searchUrl) {
     );
 
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 60000 });
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(8000);
 
     const products = await page.evaluate(() => {
       const out = [];
@@ -281,7 +288,6 @@ app.post("/webhook", async (req, res) => {
         const html = await fetchHtml(searchUrl);
         let products = extractProductsFromHtml(html);
 
-        // ✅ se vier vazio, tenta Puppeteer
         if (!products.length) {
           console.log("Nada no HTML, tentando Puppeteer...");
           products = await fetchProductsWithPuppeteer(searchUrl);

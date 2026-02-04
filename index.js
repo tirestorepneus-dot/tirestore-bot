@@ -90,12 +90,12 @@ async function sendMenu(to) {
               {
                 title: "Atendimento",
                 rows: [
-                  { id: "buy", title: "Comprar pneus", description: "Orçamento por medida" },
-                  { id: "after", title: "Pós-venda", description: "Suporte após compra" },
-                  { id: "track", title: "Rastreamento", description: "Acompanhar pedido" },
-                  { id: "return", title: "Troca ou devolução", description: "Solicitar troca" },
-                  { id: "warranty", title: "Garantia", description: "Abrir chamado" },
-                  { id: "cancel", title: "Cancelamento", description: "Cancelar pedido" },
+                  { id: "buy", title: "Comprar pneus" },
+                  { id: "after", title: "Pós-venda" },
+                  { id: "track", title: "Rastreamento"},
+                  { id: "return", title: "Troca ou devolução" },
+                  { id: "warranty", title: "Garantia" },
+                  { id: "cancel", title: "Cancelamento" },
                 ],
               },
             ],
@@ -352,10 +352,19 @@ app.post("/webhook", async (req, res) => {
       msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
 
     if (choice === "buy") {
-      sessions.set(from, { step: "WAIT_SIZE" });
-      await sendText(from, "Show! Me mande a medida do pneu (ex: 175/70 R13).");
-      return res.sendStatus(200);
-    }
+  sessions.set(from, { step: "WAIT_SIZE" });
+
+  await sendText(
+    from,
+    "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\n" +
+      "Informe a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\n" +
+      "Também estamos disponíveis pelo telefone (11) 94036-2616 📞\n" +
+      "Atendimento de segunda a sexta, das 8h às 18h."
+  );
+
+  return res.sendStatus(200);
+}
+
 
     await sendText(from, "Opção recebida: " + choice);
     return res.sendStatus(200);

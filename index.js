@@ -283,11 +283,12 @@ function formatBudget(size, products, searchUrl) {
   let msg = `🛞 *TireStore — Orçamento para ${size}*\n\n`;
 
   if (!products.length) {
-    msg += `Encontrei a busca, mas não consegui listar automaticamente.\n\n`;
-    msg += `Veja aqui:\n${searchUrl}\n\n`;
-    msg += `✅ Vou passar para um atendente finalizar com você.`;
-    return msg;
-  }
+  msg += `Encontrei opções disponíveis para esta medida.\n\n`;
+  msg += `🔎 Confira todas as marcas e modelos aqui:\n${searchUrl}\n\n`;
+  msg += `✅ Vou passar para um atendente finalizar seu orçamento.`;
+  return msg;
+}
+
 
   msg += `Encontrei estas opções no site:\n\n`;
   products.forEach((p, i) => {

@@ -23,6 +23,9 @@ console.log("WhatsApp Token configurado:", WHATSAPP_TOKEN ? "SIM ✅" : "NÃO �
 console.log("Phone ID:", PHONE_NUMBER_ID);
 console.log("===========================");
 
+// ✅ sleep compatível com qualquer versão
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // Memória simples por cliente
 const sessions = new Map(); // from -> { step: "WAIT_SIZE" }
 
@@ -183,7 +186,7 @@ function extractProductsFromHtml(html) {
   return products;
 }
 
-// ✅ Puppeteer (Railway-friendly)
+// ✅ Puppeteer (Railway-friendly) + sleep compatível
 async function fetchProductsWithPuppeteer(searchUrl) {
   const browser = await puppeteer.launch({
     headless: true,
@@ -204,7 +207,7 @@ async function fetchProductsWithPuppeteer(searchUrl) {
     );
 
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 60000 });
-    await page.waitForTimeout(8000);
+    await sleep(8000); // ✅ trocado (sem waitForTimeout)
 
     const products = await page.evaluate(() => {
       const out = [];

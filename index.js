@@ -6,7 +6,7 @@ import puppeteer from "puppeteer";
 
 dotenv.config();
 
-console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A");
+console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
 
 const app = express();
 app.use(express.json());
@@ -30,7 +30,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sessions = new Map(); // from -> { step: "WAIT_SIZE" }
 
 app.get("/", (req, res) => {
-  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅");
+  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
 });
 
 // Verificação do webhook (Meta)
@@ -82,9 +82,7 @@ async function sendMenu(to) {
         interactive: {
           type: "list",
           header: { type: "text", text: "TireStore" },
-          body: {
-            text: "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?",
-          },
+          body: { text: "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?" },
           footer: { text: "Escolha uma opção" },
           action: {
             button: "Ver opções",
@@ -141,7 +139,25 @@ async function fetchHtml(url) {
   return r.data;
 }
 
-// Extrai produtos do HTML (heurístico)
+// ✅ filtro de URL que parece produto (evita /pesquisa, #/marca, limpar filtros etc.)
+function isProductHref(href) {
+  const h = (href || "").toLowerCase();
+
+  const looksLike =
+    h.includes("/p/") || h.includes("/produto") || h.includes("/product");
+
+  const isGarbage =
+    h.includes("/pesquisa") ||
+    h.includes("#/") ||
+    h.includes("marca-") ||
+    h.includes("limpar") ||
+    h.includes("filtro") ||
+    h.includes("filters");
+
+  return looksLike && !isGarbage;
+}
+
+// Extrai produtos do HTML (Cheerio) - filtrado
 function extractProductsFromHtml(html) {
   const $ = cheerio.load(html);
 
@@ -151,14 +167,9 @@ function extractProductsFromHtml(html) {
     const name = $(el).text().replace(/\s+/g, " ").trim();
 
     if (!href || name.length < 10) return;
+    if (!isProductHref(href)) return;
 
-    const looksLikeProduct =
-      href.includes("/p/") ||
-      href.includes("/produto") ||
-      href.includes("/product") ||
-      href.toLowerCase().includes("sku");
-
-    if (looksLikeProduct) candidates.push({ href, name });
+    candidates.push({ href, name });
   });
 
   const seen = new Set();
@@ -177,7 +188,8 @@ function extractProductsFromHtml(html) {
     const m = blockText.match(/R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}/);
     const price = m ? m[0] : null;
 
-    if (/comprar|ver|detalhes|saiba|clique/i.test(c.name)) continue;
+    // evita nomes genéricos
+    if (/comprar|ver|detalhes|saiba|clique|limpar/i.test(c.name)) continue;
 
     products.push({ name: c.name, url, price });
     if (products.length >= 6) break;
@@ -186,7 +198,7 @@ function extractProductsFromHtml(html) {
   return products;
 }
 
-// ✅ Puppeteer (Railway-friendly) + sleep compatível
+// ✅ Puppeteer (Railway-friendly) + sleep compatível + FILTRO DE PRODUTO
 async function fetchProductsWithPuppeteer(searchUrl) {
   const browser = await puppeteer.launch({
     headless: true,
@@ -207,32 +219,54 @@ async function fetchProductsWithPuppeteer(searchUrl) {
     );
 
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 60000 });
-    await sleep(8000); // ✅ trocado (sem waitForTimeout)
+    await sleep(8000);
 
     const products = await page.evaluate(() => {
       const out = [];
       const seen = new Set();
 
-      const anchors = Array.from(document.querySelectorAll("a[href]"));
+      const isProductUrl = (url) => {
+        if (!url) return false;
+        const u = url.toLowerCase();
+        const looks =
+          u.includes("/p/") || u.includes("/produto") || u.includes("/product");
+        const bad =
+          u.includes("/pesquisa") ||
+          u.includes("#/") ||
+          u.includes("marca-") ||
+          u.includes("limpar") ||
+          u.includes("filtro") ||
+          u.includes("filters");
+        return looks && !bad;
+      };
+
+      // tenta “links de produto” primeiro
+      const anchors = Array.from(
+        document.querySelectorAll('a[href*="/p/"], a[href*="/produto"], a[href*="/product"]')
+      );
 
       for (const a of anchors) {
         const url = a.href;
-        const name = (a.innerText || "").replace(/\s+/g, " ").trim();
-        if (!url || !name || name.length < 8) continue;
+        if (!isProductUrl(url)) continue;
 
-        const block =
-          a.closest("article")?.innerText ||
-          a.closest("li")?.innerText ||
-          a.parentElement?.innerText ||
-          "";
+        const name = (a.innerText || "").replace(/\s+/g, " ").trim();
+        if (!name || name.length < 8) continue;
+
+        const container =
+          a.closest("article") ||
+          a.closest("li") ||
+          a.closest("div") ||
+          a.parentElement;
+
+        const block = (container?.innerText || "").replace(/\s+/g, " ").trim();
 
         const m = block.match(/R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}/);
-        if (!m) continue;
+        const price = m ? m[0] : null;
 
         if (seen.has(url)) continue;
         seen.add(url);
 
-        out.push({ name, url, price: m[0] });
+        out.push({ name, url, price });
         if (out.length >= 6) break;
       }
 
@@ -292,7 +326,7 @@ app.post("/webhook", async (req, res) => {
         let products = extractProductsFromHtml(html);
 
         if (!products.length) {
-          console.log("Nada no HTML, tentando Puppeteer...");
+          console.log("Nada no HTML (Cheerio), tentando Puppeteer...");
           products = await fetchProductsWithPuppeteer(searchUrl);
         }
 

@@ -119,6 +119,48 @@ app.post("/webhook", async (req, res) => {
 
   res.sendStatus(404);
 });
+app.get("/test", async (req, res) => {
+  try {
+    const to = "5511971800604"; // 👈 SEU número aqui (com 55 e DDD)
+
+    const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
+
+    await axios.post(
+      url,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+          name: "jaspers_market_order_confirmation_v1",
+          language: { code: "en_US" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: "Cliente Tirestore" },
+                { type: "text", text: "987654" },
+                { type: "text", text: "Hoje" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    res.send("Mensagem enviada para seu WhatsApp ✅");
+  } catch (e) {
+    console.log(e.response?.data || e.message);
+    res.send("Erro ao enviar ❌");
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log("Servidor ativo e aguardando na porta", PORT);

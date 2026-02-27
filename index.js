@@ -27,7 +27,7 @@ console.log("===========================");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Memória simples por cliente
-const sessions = new Map(); // from -> { step: "WAIT_SIZE" | "WAIT_TRACKING" | "WAIT_AFTER_SALES" }
+const sessions = new Map(); // from -> { step: "WAIT_SIZE" | "WAIT_TRACKING" | "WAIT_AFTER_SALES" | "PAUSED" }
 
 app.get("/", (req, res) => {
   res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
@@ -282,14 +282,17 @@ app.post("/webhook", async (req, res) => {
 
   const from = msg.from;
   const type = msg.type;
+  const session = sessions.get(from);
+
+  // 🛑 TRAVA DE PAUSA: Se estiver pausado, o bot não responde nada
+  if (session?.step === "PAUSED") return res.sendStatus(200);
 
   if (type === "text") {
     const text = (msg.text?.body || "").trim();
-    const session = sessions.get(from);
 
     // ✅ Lógica para Orçamento (Medida do Pneu)
     if (session?.step === "WAIT_SIZE") {
-      sessions.delete(from);
+      sessions.set(from, { step: "PAUSED" }); // ✅ PAUSA AQUI
       const sizeNormalized = normalizeSize(text); 
       const searchUrl = buildSearchUrl(sizeNormalized);
 
@@ -308,7 +311,7 @@ app.post("/webhook", async (req, res) => {
 
     // ✅ Lógica para Rastreamento (CPF ou Pedido) com Horário
     if (session?.step === "WAIT_TRACKING") {
-      sessions.delete(from);
+      sessions.set(from, { step: "PAUSED" }); // ✅ PAUSA AQUI
       if (isWorkHours()) {
         await sendText(
           from, 
@@ -328,7 +331,7 @@ app.post("/webhook", async (req, res) => {
 
     // ✅ Lógica para Pós-venda com Horário
     if (session?.step === "WAIT_AFTER_SALES") {
-      sessions.delete(from);
+      sessions.set(from, { step: "PAUSED" }); // ✅ PAUSA AQUI
       if (isWorkHours()) {
         await sendText(
           from,

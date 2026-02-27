@@ -6,7 +6,7 @@ import puppeteer from "puppeteer";
 
 dotenv.config();
 
-console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + RESET 24H)");
+console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + RESET 24H + COMANDO RESETAR)");
 
 const app = express();
 app.use(express.json());
@@ -30,7 +30,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sessions = new Map(); 
 
 app.get("/", (req, res) => {
-  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + RESET 24H)");
+  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + RESET 24H + COMANDO RESETAR)");
 });
 
 // Verificação do webhook (Meta)
@@ -294,13 +294,21 @@ app.post("/webhook", async (req, res) => {
   }
 
   // Pega a sessão atualizada após o reset
-  const currentSession = sessions.get(from);
-
-  // 🛑 TRAVA DE PAUSA: Se estiver pausado, o bot não responde nada
-  if (currentSession?.step === "PAUSED") return res.sendStatus(200);
+  let currentSession = sessions.get(from);
 
   if (type === "text") {
     const text = (msg.text?.body || "").trim();
+
+    // 🛠️ COMANDO DE RESET MANUAL PARA TESTES
+    if (text.toLowerCase() === "resetar") {
+      sessions.delete(from);
+      await sendText(from, "🔄 Sessão resetada com sucesso! Enviando menu inicial...");
+      await sendMenu(from);
+      return res.sendStatus(200);
+    }
+
+    // 🛑 TRAVA DE PAUSA: Se estiver pausado, o bot não responde nada (exceto ao comando resetar acima)
+    if (currentSession?.step === "PAUSED") return res.sendStatus(200);
 
     // ✅ Lógica para Orçamento
     if (currentSession?.step === "WAIT_SIZE") {
@@ -348,6 +356,9 @@ app.post("/webhook", async (req, res) => {
   }
 
   if (type === "interactive") {
+    // 🛑 Bloqueia interações se estiver pausado (evita bugs de botões clicados após atendimento humano)
+    if (currentSession?.step === "PAUSED") return res.sendStatus(200);
+
     const choice = msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
     
     if (choice === "buy") {

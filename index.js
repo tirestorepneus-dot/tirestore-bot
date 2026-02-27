@@ -93,7 +93,6 @@ async function sendMenu(to) {
                   { id: "buy", title: "Comprar pneus" },
                   { id: "after", title: "Pós-venda" },
                   { id: "track", title: "Rastreamento"},
-
                 ],
               },
             ],
@@ -110,6 +109,20 @@ async function sendMenu(to) {
   } catch (error) {
     console.error("ERRO AO ENVIAR MENU:", error.response?.data || error.message);
   }
+}
+
+// ✅ Helpers Horário - Verifica se está entre Seg-Sex 08:00-18:00 (Fuso SP)
+function isWorkHours() {
+  const agora = new Date();
+  const brasiliaTime = new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  
+  const dia = brasiliaTime.getDay(); // 0 = Domingo, 6 = Sábado
+  const hora = brasiliaTime.getHours();
+
+  const diaUtil = dia >= 1 && dia <= 5;
+  const horaUtil = hora >= 8 && hora < 18;
+
+  return diaUtil && horaUtil;
 }
 
 // ✅ Helpers URL/site - ATUALIZADO COM PADRÃO "R" OBRIGATÓRIO
@@ -241,17 +254,22 @@ function formatBudget(size, products, searchUrl) {
   if (!products.length) {
     msg += `Encontrei opções disponíveis para esta medida.\n\n`;
     msg += `🔎 Confira todas as marcas e modelos aqui:\n${searchUrl}\n\n`;
-    msg += `✅ Vou passar para um atendente finalizar seu orçamento.`;
-    return msg;
+  } else {
+    msg += `Encontrei estas opções no site:\n\n`;
+    products.forEach((p, i) => {
+      const priceLine = p.price ? `${p.price} cada` : "Preço no link";
+      msg += `*${i + 1})* ${p.name}\n${priceLine}\n${p.url}\n\n`;
+    });
   }
 
-  msg += `Encontrei estas opções no site:\n\n`;
-  products.forEach((p, i) => {
-    const priceLine = p.price ? `${p.price} cada` : "Preço no link";
-    msg += `*${i + 1})* ${p.name}\n${priceLine}\n${p.url}\n\n`;
-  });
+  // ✅ Lógica de fechamento baseada no horário solicitado
+  if (isWorkHours()) {
+    msg += `✅ Vou passar para um atendente finalizar seu orçamento.`;
+  } else {
+    msg += `🌙 No momento estamos fora do nosso horário de atendimento (Seg a Sex, 08h às 18h).\n\n` +
+           `✅ Assim que nossa equipe retornar, um atendente finalizará seu orçamento prioritariamente!`;
+  }
 
-  msg += `✅ Vou passar para um atendente finalizar com você.`;
   return msg;
 }
 
@@ -293,14 +311,12 @@ app.post("/webhook", async (req, res) => {
   if (type === "interactive") {
     const choice = msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
     
-    // OPÇÃO: COMPRAR PNEUS
     if (choice === "buy") {
       sessions.set(from, { step: "WAIT_SIZE" });
       await sendText(from, "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\nInforme a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\nTambém estamos disponíveis pelo telefone (11) 94036-2616 📞\nAtendimento de segunda a sexta, das 8h às 18h.");
       return res.sendStatus(200);
     }
 
-    // OPÇÃO: RASTREAMENTO (TEXTO PERSONALIZADO)
     if (choice === "track") {
       await sendText(
         from, 

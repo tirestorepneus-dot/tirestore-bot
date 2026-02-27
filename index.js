@@ -375,7 +375,7 @@ app.post("/webhook", async (req, res) => {
       await sendText(
         from,
         "Estamos aqui para ajudar com sua compra! 👋\n\n" +
-        "Por favor, *escreva sua dúvida ou o problema* que você está enfrentando.\n\n" +
+        "Por favor, *escreva sua dúvida ou o problema* que você está enfrentando.\n\n" 
       );
       return res.sendStatus(200);
     }

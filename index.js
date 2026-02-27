@@ -93,9 +93,7 @@ async function sendMenu(to) {
                   { id: "buy", title: "Comprar pneus" },
                   { id: "after", title: "Pós-venda" },
                   { id: "track", title: "Rastreamento"},
-                  { id: "return", title: "Troca ou devolução" },
-                  { id: "warranty", title: "Garantia" },
-                  { id: "cancel", title: "Cancelamento" },
+
                 ],
               },
             ],

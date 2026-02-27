@@ -377,7 +377,7 @@ app.post("/webhook", async (req, res) => {
       sessions.set(from, { step: "WAIT_TRACKING", lastInteraction: now });
       await sendText(
         from, 
-        "Animado pra rodar com seus pneus novos? Eu também ficaria! 😁⚪\n\n" + // Usei o emoji de roda disponível no padrão
+        "Animado pra rodar com seus pneus novos? Eu também ficaria! 😁🛞\n\n" + // Usei o emoji de roda disponível no padrão
         "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨\n\n" +
         "Já te atualizo se está chegando ou ainda em transporte 😉\n\n" +
         "Atendimento: seg a sex, das 8h às 18h."

@@ -116,10 +116,8 @@ async function sendMenu(to) {
 
 // ✅ Helpers URL/site - ATUALIZADO COM PADRÃO "R" OBRIGATÓRIO
 function normalizeSize(input) {
-  // 1. Remove tudo que não é número para extrair a sequência pura
   const numbersOnly = String(input || "").replace(/\D/g, "");
 
-  // 2. Se o usuário digitar os 7 dígitos (ex: 2255518 ou 1757013)
   if (numbersOnly.length === 7) {
     const largura = numbersOnly.substring(0, 3);
     const perfil = numbersOnly.substring(3, 5);
@@ -127,7 +125,6 @@ function normalizeSize(input) {
     return `${largura}/${perfil}R${aro}`;
   }
 
-  // 3. Caso ele digite com espaços ou outros caracteres (ex: 225 55 18)
   const parts = (input || "").match(/\d+/g);
   if (parts && parts.length >= 3) {
     const largura = parts.find(p => p.length === 3);
@@ -137,7 +134,6 @@ function normalizeSize(input) {
     }
   }
 
-  // Fallback de segurança: limpa o básico se não identificar o padrão numérico
   return String(input || "")
     .toLowerCase()
     .replace(/aro|pneu/g, "")
@@ -162,7 +158,6 @@ async function fetchHtml(url) {
   return r.data;
 }
 
-// ✅ filtro de URL que parece produto
 function isProductHref(href) {
   const h = (href || "").toLowerCase();
   const looksLike = h.includes("/p/") || h.includes("/produto") || h.includes("/product");
@@ -170,7 +165,6 @@ function isProductHref(href) {
   return looksLike && !isGarbage;
 }
 
-// Extrai produtos do HTML (Cheerio)
 function extractProductsFromHtml(html) {
   const $ = cheerio.load(html);
   const candidates = [];
@@ -199,7 +193,6 @@ function extractProductsFromHtml(html) {
   return products;
 }
 
-// ✅ Puppeteer
 async function fetchProductsWithPuppeteer(searchUrl) {
   const browser = await puppeteer.launch({
     headless: true,
@@ -301,11 +294,26 @@ app.post("/webhook", async (req, res) => {
 
   if (type === "interactive") {
     const choice = msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
+    
+    // OPÇÃO: COMPRAR PNEUS
     if (choice === "buy") {
       sessions.set(from, { step: "WAIT_SIZE" });
       await sendText(from, "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\nInforme a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\nTambém estamos disponíveis pelo telefone (11) 94036-2616 📞\nAtendimento de segunda a sexta, das 8h às 18h.");
       return res.sendStatus(200);
     }
+
+    // OPÇÃO: RASTREAMENTO (TEXTO PERSONALIZADO)
+    if (choice === "track") {
+      await sendText(
+        from, 
+        "Animado pra rodar com seus pneus novos? Eu também ficaria! 😄🛞\n\n" +
+        "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨\n\n" +
+        "Já te atualizo se está chegando ou ainda em transporte 😉\n\n" +
+        "Atendimento: seg a sex, das 8h às 18h."
+      );
+      return res.sendStatus(200);
+    }
+
     await sendText(from, "Opção recebida: " + choice);
     return res.sendStatus(200);
   }

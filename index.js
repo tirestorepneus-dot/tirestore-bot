@@ -6,7 +6,7 @@ import puppeteer from "puppeteer";
 
 dotenv.config();
 
-console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
+console.log("🚀 SUBIU VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + RESET 24H)");
 
 const app = express();
 app.use(express.json());
@@ -26,11 +26,11 @@ console.log("===========================");
 // ✅ sleep compatível com qualquer versão
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Memória simples por cliente
-const sessions = new Map(); // from -> { step: "WAIT_SIZE" | "WAIT_TRACKING" | "WAIT_AFTER_SALES" | "PAUSED" }
+// Memória alterada para suportar objeto: from -> { step, lastInteraction }
+const sessions = new Map(); 
 
 app.get("/", (req, res) => {
-  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
+  res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + RESET 24H)");
 });
 
 // Verificação do webhook (Meta)
@@ -125,7 +125,7 @@ function isWorkHours() {
   return diaUtil && horaUtil;
 }
 
-// ✅ Helpers URL/site - ATUALIZADO COM PADRÃO "R" OBRIGATÓRIO
+// ✅ Helpers URL/site
 function normalizeSize(input) {
   const numbersOnly = String(input || "").replace(/\D/g, "");
 
@@ -223,7 +223,7 @@ async function fetchProductsWithPuppeteer(searchUrl) {
         if (!url) return false;
         const u = url.toLowerCase();
         return (u.includes("/p/") || u.includes("/produto") || u.includes("/product")) && 
-               !(u.includes("/pesquisa") || u.includes("#/") || u.includes("filtro"));
+                !(u.includes("/pesquisa") || u.includes("#/") || u.includes("filtro"));
       };
       const anchors = Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/produto"]'));
       for (const a of anchors) {
@@ -262,12 +262,11 @@ function formatBudget(size, products, searchUrl) {
     });
   }
 
-  // ✅ Lógica de fechamento baseada no horário solicitado
   if (isWorkHours()) {
     msg += `✅ Vou passar para um atendente finalizar seu orçamento.`;
   } else {
     msg += `🌙 No momento estamos fora do nosso horário de atendimento (Seg a Sex, 08h às 18h).\n\n` +
-           `✅ Assim que nossa equipe retornar, um atendente finalizará seu orçamento prioritariamente!`;
+            `✅ Assim que nossa equipe retornar, um atendente finalizará seu orçamento prioritariamente!`;
   }
 
   return msg;
@@ -282,17 +281,30 @@ app.post("/webhook", async (req, res) => {
 
   const from = msg.from;
   const type = msg.type;
+  const now = Date.now();
+
+  // 1️⃣ LOGICA DE RESET 24H
   const session = sessions.get(from);
+  if (session && session.lastInteraction) {
+      const vinteEQuatroHoras = 24 * 60 * 60 * 1000;
+      if (now - session.lastInteraction > vinteEQuatroHoras) {
+          sessions.delete(from); // Apaga a sessão antiga
+          console.log(`Sessão de ${from} resetada por inatividade de 24h.`);
+      }
+  }
+
+  // Pega a sessão atualizada após o reset
+  const currentSession = sessions.get(from);
 
   // 🛑 TRAVA DE PAUSA: Se estiver pausado, o bot não responde nada
-  if (session?.step === "PAUSED") return res.sendStatus(200);
+  if (currentSession?.step === "PAUSED") return res.sendStatus(200);
 
   if (type === "text") {
     const text = (msg.text?.body || "").trim();
 
-    // ✅ Lógica para Orçamento (Medida do Pneu)
-    if (session?.step === "WAIT_SIZE") {
-      sessions.set(from, { step: "PAUSED" }); // ✅ PAUSA AQUI
+    // ✅ Lógica para Orçamento
+    if (currentSession?.step === "WAIT_SIZE") {
+      sessions.set(from, { step: "PAUSED", lastInteraction: now }); // ✅ PAUSA AQUI
       const sizeNormalized = normalizeSize(text); 
       const searchUrl = buildSearchUrl(sizeNormalized);
 
@@ -309,41 +321,24 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // ✅ Lógica para Rastreamento (CPF ou Pedido) com Horário
-    if (session?.step === "WAIT_TRACKING") {
-      sessions.set(from, { step: "PAUSED" }); // ✅ PAUSA AQUI
+    // ✅ Lógica para Rastreamento
+    if (currentSession?.step === "WAIT_TRACKING") {
+      sessions.set(from, { step: "PAUSED", lastInteraction: now }); // ✅ PAUSA AQUI
       if (isWorkHours()) {
-        await sendText(
-          from, 
-          "Recebi as informações! 📝 Estou localizando seu pedido no sistema agora mesmo.\n\n" +
-          "⏳ Só um instante que um de nossos atendentes já vai te passar o status atualizado aqui no chat."
-        );
+        await sendText(from, "Recebi as informações! 📝 Estou localizando seu pedido agora.\n\n⏳ Um atendente já te passa o status.");
       } else {
-        await sendText(
-          from,
-          "Recebi suas informações de rastreio! 📝\n\n" +
-          "🌙 No momento estamos fora do nosso horário de atendimento (Seg a Sex, 08h às 18h).\n\n" +
-          "✅ Assim que nossa equipe retornar amanhã, verificaremos o status do seu pedido e te responderemos primeiro!"
-        );
+        await sendText(from, "Recebi suas informações de rastreio! 📝\n\n🌙 No momento estamos fora do horário comercial. Assim que retornarmos, te responderemos primeiro!");
       }
       return res.sendStatus(200);
     }
 
-    // ✅ Lógica para Pós-venda com Horário
-    if (session?.step === "WAIT_AFTER_SALES") {
-      sessions.set(from, { step: "PAUSED" }); // ✅ PAUSA AQUI
+    // ✅ Lógica para Pós-venda
+    if (currentSession?.step === "WAIT_AFTER_SALES") {
+      sessions.set(from, { step: "PAUSED", lastInteraction: now }); // ✅ PAUSA AQUI
       if (isWorkHours()) {
-        await sendText(
-          from,
-          "Entendido! Já anotei sua dúvida/problema aqui. 📝\n\n" +
-          "⏳ Um de nossos atendentes já vai te responder para resolvermos isso o quanto antes!"
-        );
+        await sendText(from, "Entendido! Já anotei sua dúvida. 📝\n\n⏳ Um atendente já vai te responder!");
       } else {
-        await sendText(
-          from,
-          "Entendido! Já registrei seu relato. 📝\n\n" +
-          "🌙 Como estamos fora do horário comercial (Seg a Sex, 08h às 18h), nossa equipe entrará em contato assim que o atendimento for retomado para te auxiliar prioritariamente! 😉"
-        );
+        await sendText(from, "Entendido! Já registrei seu relato. 📝\n\n🌙 Retornaremos em breve para te auxiliar prioritariamente!");
       }
       return res.sendStatus(200);
     }
@@ -356,30 +351,20 @@ app.post("/webhook", async (req, res) => {
     const choice = msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
     
     if (choice === "buy") {
-      sessions.set(from, { step: "WAIT_SIZE" });
-      await sendText(from, "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\nInforme a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\nTambém estamos disponíveis pelo telefone (11) 94036-2616 📞\nAtendimento de segunda a sexta, das 8h às 18h.");
+      sessions.set(from, { step: "WAIT_SIZE", lastInteraction: now });
+      await sendText(from, "Excelente escolha. Informe a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.");
       return res.sendStatus(200);
     }
 
     if (choice === "track") {
-      sessions.set(from, { step: "WAIT_TRACKING" });
-      await sendText(
-        from, 
-        "Animado pra rodar com seus pneus novos? Eu também ficaria! 😄🛞\n\n" +
-        "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨\n\n" +
-        "Já te atualizo se está chegando ou ainda em transporte 😉\n\n" +
-        "Atendimento: seg a sex, das 8h às 18h."
-      );
+      sessions.set(from, { step: "WAIT_TRACKING", lastInteraction: now });
+      await sendText(from, "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨");
       return res.sendStatus(200);
     }
 
     if (choice === "after") {
-      sessions.set(from, { step: "WAIT_AFTER_SALES" });
-      await sendText(
-        from,
-        "Estamos aqui para ajudar com sua compra! 👋\n\n" +
-        "Por favor, *escreva sua dúvida ou o problema* que você está enfrentando.\n\n" 
-      );
+      sessions.set(from, { step: "WAIT_AFTER_SALES", lastInteraction: now });
+      await sendText(from, "Estamos aqui para ajudar com sua compra! 👋\n\nPor favor, escreva sua dúvida ou o problema que está enfrentando.");
       return res.sendStatus(200);
     }
 

@@ -27,7 +27,7 @@ console.log("===========================");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Memória simples por cliente
-const sessions = new Map(); // from -> { step: "WAIT_SIZE" }
+const sessions = new Map(); // from -> { step: "WAIT_SIZE" | "WAIT_TRACKING" }
 
 app.get("/", (req, res) => {
   res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
@@ -287,6 +287,7 @@ app.post("/webhook", async (req, res) => {
     const text = (msg.text?.body || "").trim();
     const session = sessions.get(from);
 
+    // ✅ Lógica para Orçamento (Medida do Pneu)
     if (session?.step === "WAIT_SIZE") {
       sessions.delete(from);
       const sizeNormalized = normalizeSize(text); 
@@ -304,6 +305,18 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
     }
+
+    // ✅ Lógica para Rastreamento (CPF ou Pedido)
+    if (session?.step === "WAIT_TRACKING") {
+      sessions.delete(from); // Libera a sessão para o humano assumir
+      await sendText(
+        from, 
+        "Recebi as informações! 📝 Estou localizando seu pedido no sistema agora mesmo.\n\n" +
+        "⏳ Só um instante que um de nossos atendentes já vai te passar o status atualizado aqui no chat."
+      );
+      return res.sendStatus(200);
+    }
+
     await sendMenu(from);
     return res.sendStatus(200);
   }
@@ -318,6 +331,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (choice === "track") {
+      sessions.set(from, { step: "WAIT_TRACKING" }); // ✅ Define que o bot espera os dados de rastreio
       await sendText(
         from, 
         "Animado pra rodar com seus pneus novos? Eu também ficaria! 😄🛞\n\n" +

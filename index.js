@@ -116,12 +116,28 @@ async function sendMenu(to) {
 
 // Helpers URL/site
 function normalizeSize(input) {
-  return String(input || "")
+  // 1. Limpa o texto: minúsculo e remove caracteres estranhos (exceto números e a letra R)
+  const cleanInput = String(input || "")
     .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/-/g, "/");
-}
+    .replace(/[^0-9r]/g, " "); // Troca tudo que não é número ou 'r' por espaço
 
+  // 2. Regex para encontrar o padrão: 3 números, depois 2 números, depois o aro (2 números)
+  // Ex: 175 70 13 ou 175/70r13 ou aro 13 175 70
+  const match = cleanInput.match(/(\d{3})\s*(\d{2})\s*r?(\d{2})/);
+
+  if (match) {
+    const largura = match[1];
+    const perfil = match[2];
+    const aro = match[3];
+
+    // Retorna no formato padrão do mercado: 175/70R13
+    return `${largura}/${perfil}R${aro}`;
+  }
+
+  // Caso o usuário digite algo totalmente fora do padrão, 
+  // tentamos apenas remover espaços para não quebrar a URL
+  return input.replace(/\s+/g, "");
+}
 function buildSearchUrl(size) {
   const q = normalizeSize(size);
   return `https://www.tirestore.com.br/pesquisa?t=${encodeURIComponent(q)}`;

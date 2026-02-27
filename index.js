@@ -27,7 +27,7 @@ console.log("===========================");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Memória simples por cliente
-const sessions = new Map(); // from -> { step: "WAIT_SIZE" | "WAIT_TRACKING" }
+const sessions = new Map(); // from -> { step: "WAIT_SIZE" | "WAIT_TRACKING" | "WAIT_AFTER_SALES" }
 
 app.get("/", (req, res) => {
   res.send("VERSAO NOVA FINAL — 2026-02-04 A ✅ (ORÇAMENTO + PUPPETEER FILTRADO)");
@@ -306,14 +306,42 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // ✅ Lógica para Rastreamento (CPF ou Pedido)
+    // ✅ Lógica para Rastreamento (CPF ou Pedido) com Horário
     if (session?.step === "WAIT_TRACKING") {
-      sessions.delete(from); // Libera a sessão para o humano assumir
-      await sendText(
-        from, 
-        "Recebi as informações! 📝 Estou localizando seu pedido no sistema agora mesmo.\n\n" +
-        "⏳ Só um instante que um de nossos atendentes já vai te passar o status atualizado aqui no chat."
-      );
+      sessions.delete(from);
+      if (isWorkHours()) {
+        await sendText(
+          from, 
+          "Recebi as informações! 📝 Estou localizando seu pedido no sistema agora mesmo.\n\n" +
+          "⏳ Só um instante que um de nossos atendentes já vai te passar o status atualizado aqui no chat."
+        );
+      } else {
+        await sendText(
+          from,
+          "Recebi suas informações de rastreio! 📝\n\n" +
+          "🌙 No momento estamos fora do nosso horário de atendimento (Seg a Sex, 08h às 18h).\n\n" +
+          "✅ Assim que nossa equipe retornar amanhã, verificaremos o status do seu pedido e te responderemos primeiro!"
+        );
+      }
+      return res.sendStatus(200);
+    }
+
+    // ✅ Lógica para Pós-venda com Horário
+    if (session?.step === "WAIT_AFTER_SALES") {
+      sessions.delete(from);
+      if (isWorkHours()) {
+        await sendText(
+          from,
+          "Entendido! Já anotei sua dúvida/problema aqui. 📝\n\n" +
+          "⏳ Um de nossos atendentes já vai te responder para resolvermos isso o quanto antes!"
+        );
+      } else {
+        await sendText(
+          from,
+          "Entendido! Já registrei seu relato. 📝\n\n" +
+          "🌙 Como estamos fora do horário comercial (Seg a Sex, 08h às 18h), nossa equipe entrará em contato assim que o atendimento for retomado para te auxiliar prioritariamente! 😉"
+        );
+      }
       return res.sendStatus(200);
     }
 
@@ -331,13 +359,24 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (choice === "track") {
-      sessions.set(from, { step: "WAIT_TRACKING" }); // ✅ Define que o bot espera os dados de rastreio
+      sessions.set(from, { step: "WAIT_TRACKING" });
       await sendText(
         from, 
         "Animado pra rodar com seus pneus novos? Eu também ficaria! 😄🛞\n\n" +
         "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨\n\n" +
         "Já te atualizo se está chegando ou ainda em transporte 😉\n\n" +
         "Atendimento: seg a sex, das 8h às 18h."
+      );
+      return res.sendStatus(200);
+    }
+
+    if (choice === "after") {
+      sessions.set(from, { step: "WAIT_AFTER_SALES" });
+      await sendText(
+        from,
+        "Estamos aqui para ajudar com sua compra! 👋\n\n" +
+        "Por favor, *escreva sua dúvida ou o problema* que você está enfrentando.\n\n" +
+        "Um de nossos atendentes já vai te atender para te auxiliar! 👨‍💻"
       );
       return res.sendStatus(200);
     }

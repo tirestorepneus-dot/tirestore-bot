@@ -376,7 +376,6 @@ app.post("/webhook", async (req, res) => {
         from,
         "Estamos aqui para ajudar com sua compra! 👋\n\n" +
         "Por favor, *escreva sua dúvida ou o problema* que você está enfrentando.\n\n" +
-        "Um de nossos atendentes já vai te atender para te auxiliar! 👨‍💻"
       );
       return res.sendStatus(200);
     }

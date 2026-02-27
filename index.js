@@ -114,10 +114,33 @@ async function sendMenu(to) {
   }
 }
 
-// Helpers URL/site
+// ✅ Helpers URL/site - ATUALIZADO COM PADRÃO "R" OBRIGATÓRIO
 function normalizeSize(input) {
+  // 1. Remove tudo que não é número para extrair a sequência pura
+  const numbersOnly = String(input || "").replace(/\D/g, "");
+
+  // 2. Se o usuário digitar os 7 dígitos (ex: 2255518 ou 1757013)
+  if (numbersOnly.length === 7) {
+    const largura = numbersOnly.substring(0, 3);
+    const perfil = numbersOnly.substring(3, 5);
+    const aro = numbersOnly.substring(5, 7);
+    return `${largura}/${perfil}R${aro}`;
+  }
+
+  // 3. Caso ele digite com espaços ou outros caracteres (ex: 225 55 18)
+  const parts = (input || "").match(/\d+/g);
+  if (parts && parts.length >= 3) {
+    const largura = parts.find(p => p.length === 3);
+    const outros = parts.filter(p => p !== largura);
+    if (largura && outros.length >= 2) {
+      return `${largura}/${outros[0]}R${outros[1]}`;
+    }
+  }
+
+  // Fallback de segurança: limpa o básico se não identificar o padrão numérico
   return String(input || "")
     .toLowerCase()
+    .replace(/aro|pneu/g, "")
     .replace(/\s+/g, "")
     .replace(/-/g, "/");
 }
@@ -139,140 +162,82 @@ async function fetchHtml(url) {
   return r.data;
 }
 
-// ✅ filtro de URL que parece produto (evita /pesquisa, #/marca, limpar filtros etc.)
+// ✅ filtro de URL que parece produto
 function isProductHref(href) {
   const h = (href || "").toLowerCase();
-
-  const looksLike =
-    h.includes("/p/") || h.includes("/produto") || h.includes("/product");
-
-  const isGarbage =
-    h.includes("/pesquisa") ||
-    h.includes("#/") ||
-    h.includes("marca-") ||
-    h.includes("limpar") ||
-    h.includes("filtro") ||
-    h.includes("filters");
-
+  const looksLike = h.includes("/p/") || h.includes("/produto") || h.includes("/product");
+  const isGarbage = h.includes("/pesquisa") || h.includes("#/") || h.includes("marca-") || h.includes("limpar") || h.includes("filtro") || h.includes("filters");
   return looksLike && !isGarbage;
 }
 
-// Extrai produtos do HTML (Cheerio) - filtrado
+// Extrai produtos do HTML (Cheerio)
 function extractProductsFromHtml(html) {
   const $ = cheerio.load(html);
-
   const candidates = [];
   $("a[href]").each((_, el) => {
     const href = $(el).attr("href");
     const name = $(el).text().replace(/\s+/g, " ").trim();
-
     if (!href || name.length < 10) return;
     if (!isProductHref(href)) return;
-
     candidates.push({ href, name });
   });
 
   const seen = new Set();
   const products = [];
-
   for (const c of candidates) {
-    const url = c.href.startsWith("http")
-      ? c.href
-      : `https://www.tirestore.com.br${c.href.startsWith("/") ? "" : "/"}${c.href}`;
-
+    const url = c.href.startsWith("http") ? c.href : `https://www.tirestore.com.br${c.href.startsWith("/") ? "" : "/"}${c.href}`;
     if (seen.has(url)) continue;
     seen.add(url);
-
     const a = $(`a[href="${c.href}"]`).first();
     const blockText = a.parent().text().replace(/\s+/g, " ").trim();
-    const m = blockText.match(/R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}/);
+    const m = blockText.match(/R\$\s?\d{1,3}(?:\.\d.3})*,\d{2}/);
     const price = m ? m[0] : null;
-
-    // evita nomes genéricos
     if (/comprar|ver|detalhes|saiba|clique|limpar/i.test(c.name)) continue;
-
     products.push({ name: c.name, url, price });
     if (products.length >= 6) break;
   }
-
   return products;
 }
 
-// ✅ Puppeteer (Railway-friendly) + sleep compatível + FILTRO DE PRODUTO
+// ✅ Puppeteer
 async function fetchProductsWithPuppeteer(searchUrl) {
   const browser = await puppeteer.launch({
     headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--single-process",
-      "--no-zygote",
-    ],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--single-process", "--no-zygote"],
   });
 
   try {
     const page = await browser.newPage();
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-    );
-
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 60000 });
     await sleep(8000);
 
     const products = await page.evaluate(() => {
       const out = [];
       const seen = new Set();
-
       const isProductUrl = (url) => {
         if (!url) return false;
         const u = url.toLowerCase();
-        const looks =
-          u.includes("/p/") || u.includes("/produto") || u.includes("/product");
-        const bad =
-          u.includes("/pesquisa") ||
-          u.includes("#/") ||
-          u.includes("marca-") ||
-          u.includes("limpar") ||
-          u.includes("filtro") ||
-          u.includes("filters");
-        return looks && !bad;
+        return (u.includes("/p/") || u.includes("/produto") || u.includes("/product")) && 
+               !(u.includes("/pesquisa") || u.includes("#/") || u.includes("filtro"));
       };
-
-      // tenta “links de produto” primeiro
-      const anchors = Array.from(
-        document.querySelectorAll('a[href*="/p/"], a[href*="/produto"], a[href*="/product"]')
-      );
-
+      const anchors = Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/produto"]'));
       for (const a of anchors) {
         const url = a.href;
         if (!isProductUrl(url)) continue;
-
         const name = (a.innerText || "").replace(/\s+/g, " ").trim();
         if (!name || name.length < 8) continue;
-
-        const container =
-          a.closest("article") ||
-          a.closest("li") ||
-          a.closest("div") ||
-          a.parentElement;
-
+        const container = a.closest("article") || a.closest("li") || a.closest("div") || a.parentElement;
         const block = (container?.innerText || "").replace(/\s+/g, " ").trim();
-
         const m = block.match(/R\$\s?\d{1,3}(?:\.\d{3})*,\d{2}/);
         const price = m ? m[0] : null;
-
         if (seen.has(url)) continue;
         seen.add(url);
-
         out.push({ name, url, price });
         if (out.length >= 6) break;
       }
-
       return out;
     });
-
     return products;
   } finally {
     await browser.close();
@@ -283,12 +248,11 @@ function formatBudget(size, products, searchUrl) {
   let msg = `🛞 *TireStore — Orçamento para ${size}*\n\n`;
 
   if (!products.length) {
-  msg += `Encontrei opções disponíveis para esta medida.\n\n`;
-  msg += `🔎 Confira todas as marcas e modelos aqui:\n${searchUrl}\n\n`;
-  msg += `✅ Vou passar para um atendente finalizar seu orçamento.`;
-  return msg;
-}
-
+    msg += `Encontrei opções disponíveis para esta medida.\n\n`;
+    msg += `🔎 Confira todas as marcas e modelos aqui:\n${searchUrl}\n\n`;
+    msg += `✅ Vou passar para um atendente finalizar seu orçamento.`;
+    return msg;
+  }
 
   msg += `Encontrei estas opções no site:\n\n`;
   products.forEach((p, i) => {
@@ -303,9 +267,7 @@ function formatBudget(size, products, searchUrl) {
 // Webhook principal
 app.post("/webhook", async (req, res) => {
   const body = req.body;
-
   if (body.object !== "whatsapp_business_account") return res.sendStatus(404);
-
   const msg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
   if (!msg) return res.sendStatus(200);
 
@@ -318,58 +280,35 @@ app.post("/webhook", async (req, res) => {
 
     if (session?.step === "WAIT_SIZE") {
       sessions.delete(from);
-
-      const size = text;
-      const searchUrl = buildSearchUrl(size);
+      const sizeNormalized = normalizeSize(text); 
+      const searchUrl = buildSearchUrl(sizeNormalized);
 
       try {
         const html = await fetchHtml(searchUrl);
         let products = extractProductsFromHtml(html);
+        if (!products.length) products = await fetchProductsWithPuppeteer(searchUrl);
 
-        if (!products.length) {
-          console.log("Nada no HTML (Cheerio), tentando Puppeteer...");
-          products = await fetchProductsWithPuppeteer(searchUrl);
-        }
-
-        await sendText(from, formatBudget(size, products, searchUrl));
+        await sendText(from, formatBudget(sizeNormalized, products, searchUrl));
         return res.sendStatus(200);
       } catch (e) {
-        console.log("Erro ao buscar site:", e.response?.status, e.message);
-        await sendText(
-          from,
-          `Não consegui consultar o site agora.\n\nVeja a busca aqui:\n${searchUrl}\n\n✅ Vou passar para um atendente finalizar com você.`
-        );
+        await sendText(from, `Não consegui consultar o site agora.\n\nVeja a busca aqui:\n${searchUrl}\n\n✅ Vou passar para um atendente finalizar com você.`);
         return res.sendStatus(200);
       }
     }
-
     await sendMenu(from);
     return res.sendStatus(200);
   }
 
   if (type === "interactive") {
-    const choice =
-      msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
-
+    const choice = msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id;
     if (choice === "buy") {
-  sessions.set(from, { step: "WAIT_SIZE" });
-
-  await sendText(
-    from,
-    "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\n" +
-      "Informe a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\n" +
-      "Também estamos disponíveis pelo telefone (11) 94036-2616 📞\n" +
-      "Atendimento de segunda a sexta, das 8h às 18h."
-  );
-
-  return res.sendStatus(200);
-}
-
-
+      sessions.set(from, { step: "WAIT_SIZE" });
+      await sendText(from, "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\nInforme a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\nTambém estamos disponíveis pelo telefone (11) 94036-2616 📞\nAtendimento de segunda a sexta, das 8h às 18h.");
+      return res.sendStatus(200);
+    }
     await sendText(from, "Opção recebida: " + choice);
     return res.sendStatus(200);
   }
-
   return res.sendStatus(200);
 });
 

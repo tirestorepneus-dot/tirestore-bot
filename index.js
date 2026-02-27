@@ -363,13 +363,25 @@ app.post("/webhook", async (req, res) => {
     
     if (choice === "buy") {
       sessions.set(from, { step: "WAIT_SIZE", lastInteraction: now });
-      await sendText(from, "Excelente escolha. Informe a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.");
+      await sendText(
+        from, 
+        "Excelente escolha. Vamos encontrar o pneu certo para o seu veículo.\n\n" +
+        "Informe a medida do pneu (ex: 175/70 R13) para que eu consulte as opções disponíveis.\n\n" +
+        "Também estamos disponíveis pelo telefone (11) 94036-2616 📞\n" +
+        "Atendimento de segunda a sexta, das 8h às 18h."
+      );
       return res.sendStatus(200);
     }
 
     if (choice === "track") {
       sessions.set(from, { step: "WAIT_TRACKING", lastInteraction: now });
-      await sendText(from, "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨");
+      await sendText(
+        from, 
+        "Animado pra rodar com seus pneus novos? Eu também ficaria! 😁⚪\n\n" + // Usei o emoji de roda disponível no padrão
+        "Me envia o número do pedido ou CPF do titular que eu verifico o status pra você rapidinho 🚚💨\n\n" +
+        "Já te atualizo se está chegando ou ainda em transporte 😉\n\n" +
+        "Atendimento: seg a sex, das 8h às 18h."
+      );
       return res.sendStatus(200);
     }
 

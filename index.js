@@ -282,19 +282,7 @@ app.post("/webhook", async (req, res) => {
   const from = msg.from;
   const type = msg.type;
   const now = Date.now();
-  // --- INICIO DO ESPELHAMENTO CHATWOOT ---
-  let chatwootText = "";
-  if (type === "text") chatwootText = msg.text?.body;
-  if (type === "interactive") {
-    chatwootText = msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "Opção Menu";
-  }
-
-  if (chatwootText) {
-    const contactName = body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.profile?.name || "Cliente WhatsApp";
-    // Chama a função sem "await" para não atrasar a resposta do bot para o cliente
-    sendToChatwoot(from, chatwootText, contactName);
-  }
-  // --- FIM DO ESPELHAMENTO CHATWOOT ---
+  
 
   // 1️⃣ LOGICA DE RESET 24H
   const session = sessions.get(from);
@@ -409,43 +397,7 @@ app.post("/webhook", async (req, res) => {
   }
   return res.sendStatus(200);
 });
-// 📥 ROTA PARA RECEBER RESPOSTAS DO CHATWOOT E MANDAR PRO WHATSAPP
-// 🚀 FUNÇÃO PARA ESPELHAR MENSAGEM NO CHATWOOT
-async function sendToChatwoot(from, text, name = "Cliente WhatsApp") {
-  try {
-    const { CHATWOOT_BASE_URL, CHATWOOT_ACCESS_TOKEN, CHATWOOT_ACCOUNT_ID, CHATWOOT_INBOX_IDENTIFIER } = process.env;
-    if (!CHATWOOT_BASE_URL || !CHATWOOT_ACCESS_TOKEN) return;
 
-    const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations`;
-    await axios.post(url, {
-      source_id: from,
-      inbox_id: CHATWOOT_INBOX_IDENTIFIER,
-      contact_name: name,
-      message: { content: text, message_type: "incoming" }
-    }, {
-      headers: { 'api_access_token': CHATWOOT_ACCESS_TOKEN, 'Content-Type': 'application/json' }
-    });
-    console.log(`✅ Mensagem de ${from} enviada ao Chatwoot.`);
-  } catch (error) {
-    console.error("❌ ERRO CHATWOOT:", error.response?.data || error.message);
-  }
-}
-app.post("/chatwoot", async (req, res) => {
-  const { event, message_type, conversation, content, private: isPrivate } = req.body;
-
-  // Só envia se for uma mensagem nova, enviada por um atendente e NÃO for nota interna
-  if (event === "message_created" && message_type === "outgoing" && !isPrivate) {
-    const to = conversation.contact_inbox.source_id; // O número do cliente
-    const text = content; // O que o atendente digitou
-
-    console.log(`✉️ Enviando resposta do Chatwoot para ${to}: ${text}`);
-    
-    // Chama a função que você já tem no código para mandar o Zap
-    await sendText(to, text);
-  }
-
-  res.sendStatus(200);
-});
 app.listen(PORT, () => {
   console.log("Servidor ativo e aguardando na porta", PORT);
 });

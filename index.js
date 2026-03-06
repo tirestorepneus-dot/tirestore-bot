@@ -396,7 +396,23 @@ app.post("/webhook", async (req, res) => {
   }
   return res.sendStatus(200);
 });
+// 📥 ROTA PARA RECEBER RESPOSTAS DO CHATWOOT E MANDAR PRO WHATSAPP
+app.post("/chatwoot", async (req, res) => {
+  const { event, message_type, conversation, content, private: isPrivate } = req.body;
 
+  // Só envia se for uma mensagem nova, enviada por um atendente e NÃO for nota interna
+  if (event === "message_created" && message_type === "outgoing" && !isPrivate) {
+    const to = conversation.contact_inbox.source_id; // O número do cliente
+    const text = content; // O que o atendente digitou
+
+    console.log(`✉️ Enviando resposta do Chatwoot para ${to}: ${text}`);
+    
+    // Chama a função que você já tem no código para mandar o Zap
+    await sendText(to, text);
+  }
+
+  res.sendStatus(200);
+});
 app.listen(PORT, () => {
   console.log("Servidor ativo e aguardando na porta", PORT);
 });

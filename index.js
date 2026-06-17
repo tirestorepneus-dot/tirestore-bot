@@ -92,14 +92,18 @@ async function handoffToHuman(conversationId) {
 // ---------- Menu (agora em texto simples, mais confiável via Chatwoot) ----------
 
 async function sendMenu(conversationId) {
-  const texto =
-    "Olá! Somos a TireStore 🛞\n\n" +
-    "Como podemos te ajudar hoje? Responda com o número da opção:\n\n" +
-    "1️⃣ Comprar pneus\n" +
-    "2️⃣ Pós-venda\n" +
-    "3️⃣ Rastreamento\n" +
-    "4️⃣ Auto Center";
-  await sendMessage(conversationId, texto);
+  await sendButtons(conversationId, "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?", [
+    { title: "Comprar pneus", value: "1" },
+    { title: "Agendar Auto Center", value: "4" },
+    { title: "Outras opções", value: "outras" },
+  ]);
+}
+
+async function sendOtherOptions(conversationId) {
+  await sendButtons(conversationId, "Sem problema, qual dessas?", [
+    { title: "Pós-venda", value: "2" },
+    { title: "Rastreamento", value: "3" },
+  ]);
 }
 
 // ---------- Helpers de horário e busca (lógica igual à versão anterior) ----------
@@ -455,10 +459,15 @@ app.post("/chatwoot-webhook", async (req, res) => {
 
   if (escolha === "4" || escolha.includes("agendar") || escolha.includes("auto center") || escolha.includes("autocenter") || escolha.includes("oficina")) {
     sessions.set(conversationId, { step: "WAIT_UNIT", lastInteraction: now });
-    await sendMessage(
-      conversationId,
-      "Qual loja você prefere?\n\nResponda com o nome:\n\n🏬 Alphaville\n🏬 Perdizes"
-    );
+    await sendButtons(conversationId, "Qual loja você prefere?", [
+      { title: "Alphaville", value: "alphaville" },
+      { title: "Perdizes", value: "perdizes" },
+    ]);
+    return res.sendStatus(200);
+  }
+
+  if (escolha === "outras" || escolha.includes("outras opç") || escolha.includes("outra opç")) {
+    await sendOtherOptions(conversationId);
     return res.sendStatus(200);
   }
 

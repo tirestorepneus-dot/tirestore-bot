@@ -54,6 +54,28 @@ async function sendMessage(conversationId, content) {
   }
 }
 
+// Envia mensagem com botões clicáveis nativos (WhatsApp reply buttons — máximo de 3)
+async function sendButtons(conversationId, text, options) {
+  try {
+    const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
+    await axios.post(
+      url,
+      {
+        content: text,
+        message_type: "outgoing",
+        private: false,
+        content_type: "input_select",
+        content_attributes: {
+          items: options.map((o) => ({ title: o.title, value: o.value })),
+        },
+      },
+      { headers: chatwootHeaders() }
+    );
+  } catch (error) {
+    console.error("ERRO AO ENVIAR BOTÕES (Chatwoot):", error.response?.data || error.message);
+  }
+}
+
 async function handoffToHuman(conversationId) {
   try {
     const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/toggle_status`;
@@ -67,13 +89,11 @@ async function handoffToHuman(conversationId) {
 // ---------- Menu (agora em texto simples, mais confiável via Chatwoot) ----------
 
 async function sendMenu(conversationId) {
-  const texto =
-    "Olá! Somos a TireStore 🛞\n\n" +
-    "Como podemos te ajudar hoje? Responda com o número da opção:\n\n" +
-    "1️⃣ Comprar pneus\n" +
-    "2️⃣ Pós-venda\n" +
-    "3️⃣ Rastreamento";
-  await sendMessage(conversationId, texto);
+  await sendButtons(conversationId, "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?", [
+    { title: "Comprar pneus", value: "1" },
+    { title: "Pós-venda", value: "2" },
+    { title: "Rastreamento", value: "3" },
+  ]);
 }
 
 // ---------- Helpers de horário e busca (lógica igual à versão anterior) ----------

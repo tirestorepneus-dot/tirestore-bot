@@ -288,6 +288,10 @@ app.post("/chatwoot-webhook", async (req, res) => {
   const text = (body.content || "").trim();
   if (!conversationId) return res.sendStatus(200);
 
+  console.log(
+    `📩 Recebido - conversation=${conversationId} texto="${text}" status_conversa=${body.conversation?.status}`
+  );
+
   const now = Date.now();
 
   // Reset de sessão por inatividade de 24h (igual lógica anterior)

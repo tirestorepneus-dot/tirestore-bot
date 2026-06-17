@@ -27,6 +27,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Sessões por conversation_id do Chatwoot (ainda em memória — trocar por banco/Redis assim que possível)
 const sessions = new Map();
+// Conversas que já foram entregues para um atendente humano — o bot ignora novas mensagens nelas
+const handedOff = new Set();
 
 app.get("/", (req, res) => {
   res.send("Bot TireStore rodando — integrado via Chatwoot Agent Bot ✅");
@@ -77,6 +79,7 @@ async function sendButtons(conversationId, text, options) {
 }
 
 async function handoffToHuman(conversationId) {
+  handedOff.add(conversationId);
   try {
     const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/toggle_status`;
     await axios.post(url, { status: "open" }, { headers: chatwootHeaders() });
@@ -301,11 +304,18 @@ app.post("/chatwoot-webhook", async (req, res) => {
   }
   let currentSession = sessions.get(conversationId);
 
-  // 🛠️ Comando manual de reset (útil pra testes)
+  // 🛠️ Comando manual de reset (útil pra testes) — funciona mesmo se já foi entregue ao humano
   if (text.toLowerCase() === "resetar") {
     sessions.delete(conversationId);
+    handedOff.delete(conversationId);
     await sendMessage(conversationId, "🔄 Sessão resetada! Enviando menu inicial...");
     await sendMenu(conversationId);
+    return res.sendStatus(200);
+  }
+
+  // 🛑 Se essa conversa já foi entregue para um atendente humano, o bot não responde mais nada
+  if (handedOff.has(conversationId)) {
+    console.log(`Conversa ${conversationId} já está com atendente humano — bot ignorando.`);
     return res.sendStatus(200);
   }
 

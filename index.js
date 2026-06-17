@@ -92,11 +92,14 @@ async function handoffToHuman(conversationId) {
 // ---------- Menu (agora em texto simples, mais confiável via Chatwoot) ----------
 
 async function sendMenu(conversationId) {
-  await sendButtons(conversationId, "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?", [
-    { title: "Comprar pneus", value: "1" },
-    { title: "Pós-venda", value: "2" },
-    { title: "Rastreamento", value: "3" },
-  ]);
+  const texto =
+    "Olá! Somos a TireStore 🛞\n\n" +
+    "Como podemos te ajudar hoje? Responda com o número da opção:\n\n" +
+    "1️⃣ Comprar pneus\n" +
+    "2️⃣ Pós-venda\n" +
+    "3️⃣ Rastreamento\n" +
+    "4️⃣ Auto Center";
+  await sendMessage(conversationId, texto);
 }
 
 // ---------- Helpers de horário e busca (lógica igual à versão anterior) ----------
@@ -373,7 +376,48 @@ app.post("/chatwoot-webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // Escolha do menu inicial (1, 2 ou 3 — ou palavra-chave)
+  // ✅ Etapa: esperando dados de agendamento do Auto Center
+  if (currentSession?.step === "WAIT_AUTOCENTER") {
+    const unidade = currentSession.unit || "Alphaville";
+    sessions.delete(conversationId);
+    if (isWorkHours()) {
+      await sendMessage(
+        conversationId,
+        `Recebido! 📝 Vou verificar a disponibilidade na unidade ${unidade}.\n\n⏳ Um atendente já confirma seu horário com você.`
+      );
+    } else {
+      await sendMessage(
+        conversationId,
+        `Recebido! 📝 Anotei os dados do seu agendamento na unidade ${unidade}.\n\n🌙 Estamos fora do horário comercial — assim que retornarmos, confirmamos seu horário prioritariamente!`
+      );
+    }
+    await handoffToHuman(conversationId);
+    return res.sendStatus(200);
+  }
+
+  // ✅ Etapa: esperando escolha da loja (Alphaville ou Perdizes)
+  if (currentSession?.step === "WAIT_UNIT") {
+    const escolhaUnidade = text.toLowerCase();
+    let unidade = null;
+    if (escolhaUnidade.includes("alphaville") || escolhaUnidade.includes("alfaville")) unidade = "Alphaville";
+    else if (escolhaUnidade.includes("perdizes")) unidade = "Perdizes";
+
+    if (!unidade) {
+      await sendMessage(conversationId, "Não entendi qual loja. Por favor, responda apenas: Alphaville ou Perdizes.");
+      return res.sendStatus(200);
+    }
+
+    sessions.set(conversationId, { step: "WAIT_AUTOCENTER", lastInteraction: now, unit: unidade });
+    await sendMessage(
+      conversationId,
+      `Perfeito! Vamos agendar seu serviço na unidade *${unidade}* 🔧\n\n` +
+        "Me envia, em uma única mensagem: modelo do veículo, placa, o serviço desejado (ex: instalação de pneus, alinhamento, balanceamento) e um dia/horário de preferência.\n\n" +
+        "Vamos confirmar a disponibilidade com você em seguida."
+    );
+    return res.sendStatus(200);
+  }
+
+  // Escolha do menu inicial (1, 2, 3 ou 4 — ou palavra-chave)
   const escolha = text.toLowerCase();
 
   if (escolha === "1" || escolha.includes("comprar")) {
@@ -405,6 +449,15 @@ app.post("/chatwoot-webhook", async (req, res) => {
     await sendMessage(
       conversationId,
       "Estamos aqui para ajudar com sua compra! 👋\n\nPor favor, escreva sua dúvida ou o problema que está enfrentando."
+    );
+    return res.sendStatus(200);
+  }
+
+  if (escolha === "4" || escolha.includes("agendar") || escolha.includes("auto center") || escolha.includes("autocenter") || escolha.includes("oficina")) {
+    sessions.set(conversationId, { step: "WAIT_UNIT", lastInteraction: now });
+    await sendMessage(
+      conversationId,
+      "Qual loja você prefere?\n\nResponda com o nome:\n\n🏬 Alphaville\n🏬 Perdizes"
     );
     return res.sendStatus(200);
   }

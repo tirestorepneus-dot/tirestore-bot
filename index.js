@@ -380,44 +380,40 @@ app.post("/chatwoot-webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // ✅ Etapa: esperando dados de agendamento do Auto Center
-  if (currentSession?.step === "WAIT_AUTOCENTER") {
-    const unidade = currentSession.unit || "Alphaville";
-    sessions.delete(conversationId);
-    if (isWorkHours()) {
-      await sendMessage(
-        conversationId,
-        `Recebido! 📝 Vou verificar a disponibilidade na unidade ${unidade}.\n\n⏳ Um atendente já confirma seu horário com você.`
-      );
-    } else {
-      await sendMessage(
-        conversationId,
-        `Recebido! 📝 Anotei os dados do seu agendamento na unidade ${unidade}.\n\n🌙 Estamos fora do horário comercial — assim que retornarmos, confirmamos seu horário prioritariamente!`
-      );
-    }
-    await handoffToHuman(conversationId);
-    return res.sendStatus(200);
-  }
-
   // ✅ Etapa: esperando escolha da loja (Alphaville ou Perdizes)
   if (currentSession?.step === "WAIT_UNIT") {
     const escolhaUnidade = text.toLowerCase();
     let unidade = null;
-    if (escolhaUnidade.includes("alphaville") || escolhaUnidade.includes("alfaville")) unidade = "Alphaville";
-    else if (escolhaUnidade.includes("perdizes")) unidade = "Perdizes";
+    if (escolhaUnidade.includes("alphaville") || escolhaUnidade.includes("alfaville")) unidade = "alphaville";
+    else if (escolhaUnidade.includes("perdizes")) unidade = "perdizes";
 
     if (!unidade) {
-      await sendMessage(conversationId, "Não entendi qual loja. Por favor, responda apenas: Alphaville ou Perdizes.");
+      await sendButtons(conversationId, "Não entendi qual loja. Qual você prefere?", [
+        { title: "Alphaville", value: "alphaville" },
+        { title: "Perdizes", value: "perdizes" },
+      ]);
       return res.sendStatus(200);
     }
 
-    sessions.set(conversationId, { step: "WAIT_AUTOCENTER", lastInteraction: now, unit: unidade });
-    await sendMessage(
-      conversationId,
-      `Perfeito! Vamos agendar seu serviço na unidade *${unidade}* 🔧\n\n` +
-        "Me envia, em uma única mensagem: modelo do veículo, placa, o serviço desejado (ex: instalação de pneus, alinhamento, balanceamento) e um dia/horário de preferência.\n\n" +
-        "Vamos confirmar a disponibilidade com você em seguida."
-    );
+    sessions.delete(conversationId);
+
+    if (unidade === "alphaville") {
+      await sendMessage(
+        conversationId,
+        "Perfeito! A unidade *TireStore Alphaville* está pronta para receber você 🏁\n\n" +
+        "Atendimento exclusivo, técnicos certificados *Pirelli* e o padrão de excelência que seu veículo merece.\n\n" +
+        "Nossa equipe já vai falar com você em instantes ✨"
+      );
+    } else {
+      await sendMessage(
+        conversationId,
+        "Perfeito! A unidade *TireStore Perdizes* está pronta para receber você 🏁\n\n" +
+        "Atendimento exclusivo, técnicos certificados *Continental* e o padrão de excelência que seu veículo merece.\n\n" +
+        "Nossa equipe já vai falar com você em instantes ✨"
+      );
+    }
+
+    await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
 

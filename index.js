@@ -78,6 +78,16 @@ async function sendButtons(conversationId, text, options) {
   }
 }
 
+async function assignToTeam(conversationId, teamId) {
+  try {
+    const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/assignments`;
+    await axios.post(url, { team_id: teamId }, { headers: chatwootHeaders() });
+    console.log(`Conversa ${conversationId} atribuída ao time ${teamId}.`);
+  } catch (error) {
+    console.error("ERRO AO ATRIBUIR TIME:", error.response?.data || error.message);
+  }
+}
+
 async function handoffToHuman(conversationId) {
   handedOff.add(conversationId);
   try {
@@ -343,6 +353,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         `Não consegui consultar o site agora.\n\nVeja a busca aqui:\n${searchUrl}\n\n✅ Vou passar para um atendente finalizar com você.`
       );
     }
+    await assignToTeam(conversationId, 4); // time venda pneu
     await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
@@ -361,6 +372,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         "Recebi suas informações de rastreio! 📝\n\n🌙 No momento estamos fora do horário comercial. Assim que retornarmos, te responderemos primeiro!"
       );
     }
+    await assignToTeam(conversationId, 3); // time pós-venda (rastreamento também é pós-venda)
     await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
@@ -376,6 +388,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         "Entendido! Já registrei seu relato. 📝\n\n🌙 Retornaremos em breve para te auxiliar prioritariamente!"
       );
     }
+    await assignToTeam(conversationId, 3); // time pós-venda
     await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
@@ -404,6 +417,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         "Atendimento exclusivo, técnicos certificados *Pirelli* e o padrão de excelência que seu veículo merece.\n\n" +
         "Nossa equipe já vai falar com você em instantes ✨"
       );
+      await assignToTeam(conversationId, 1); // time alphaville
     } else {
       await sendMessage(
         conversationId,
@@ -411,6 +425,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         "Atendimento exclusivo, técnicos certificados *Continental* e o padrão de excelência que seu veículo merece.\n\n" +
         "Nossa equipe já vai falar com você em instantes ✨"
       );
+      await assignToTeam(conversationId, 2); // time perdizes
     }
 
     await handoffToHuman(conversationId);

@@ -413,19 +413,21 @@ app.post("/chatwoot-webhook", async (req, res) => {
     if (unidade === "alphaville") {
       await sendMessage(
         conversationId,
-        "Perfeito! A unidade *TireStore Alphaville* está pronta para receber você 🏁\n\n" +
+        "Perfeito! A unidade *TireStore Alphaville* está pronta para receber você em breve 🏁\n\n" +
         "Atendimento exclusivo, técnicos certificados *Pirelli* e o padrão de excelência que seu veículo merece.\n\n" +
-        "Nossa equipe já vai falar com você em instantes ✨"
+        "📍 *Alameda Araguaia, 541 - Tamboré*\n\n" +
+        "🗓️ *Em breve abrindo as portas!* Nossa equipe já vai entrar em contato para te receber com exclusividade na inauguração ✨"
       );
-      await assignToTeam(conversationId, 1); // time alphaville
+      await assignToTeam(conversationId, 1);
     } else {
       await sendMessage(
         conversationId,
-        "Perfeito! A unidade *TireStore Perdizes* está pronta para receber você 🏁\n\n" +
+        "Perfeito! A unidade *TireStore Perdizes* está pronta para receber você em breve 🏁\n\n" +
         "Atendimento exclusivo, técnicos certificados *Continental* e o padrão de excelência que seu veículo merece.\n\n" +
-        "Nossa equipe já vai falar com você em instantes ✨"
+        "📍 *R. Turiassu, 1100 - Perdizes*\n\n" +
+        "🗓️ *Em breve abrindo as portas!* Nossa equipe já vai entrar em contato para te receber com exclusividade na inauguração ✨"
       );
-      await assignToTeam(conversationId, 2); // time perdizes
+      await assignToTeam(conversationId, 2);
     }
 
     await handoffToHuman(conversationId);

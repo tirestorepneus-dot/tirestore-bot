@@ -12,9 +12,9 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
-const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL; // ex: https://app.chatwoot.com
-const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID; // numero da conta, fica na URL do painel
-const CHATWOOT_BOT_TOKEN = process.env.CHATWOOT_BOT_TOKEN; // token gerado ao criar o Agent Bot
+const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL;
+const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID;
+const CHATWOOT_BOT_TOKEN = process.env.CHATWOOT_BOT_TOKEN;
 
 console.log("=== Configuração do Bot ===");
 console.log("Porta:", PORT);
@@ -25,9 +25,7 @@ console.log("===========================");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Sessões por conversation_id do Chatwoot (ainda em memória — trocar por banco/Redis assim que possível)
 const sessions = new Map();
-// Conversas que já foram entregues para um atendente humano — o bot ignora novas mensagens nelas
 const handedOff = new Set();
 
 app.get("/", (req, res) => {
@@ -56,7 +54,6 @@ async function sendMessage(conversationId, content) {
   }
 }
 
-// Envia mensagem com botões clicáveis nativos (WhatsApp reply buttons — máximo de 3)
 async function sendButtons(conversationId, text, options) {
   try {
     const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
@@ -99,7 +96,19 @@ async function handoffToHuman(conversationId) {
   }
 }
 
-// ---------- Menu (agora em texto simples, mais confiável via Chatwoot) ----------
+// 🆕 Verifica em tempo real se a conversa já tem agente humano atribuído no Chatwoot
+async function isAssignedToHuman(conversationId) {
+  try {
+    const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}`;
+    const res = await axios.get(url, { headers: chatwootHeaders() });
+    const assignee = res.data?.meta?.assignee;
+    return !!assignee;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---------- Menu ----------
 
 async function sendMenu(conversationId) {
   await sendButtons(conversationId, "Olá! Somos a TireStore 🛞\n\nComo podemos te ajudar hoje?", [
@@ -116,7 +125,7 @@ async function sendOtherOptions(conversationId) {
   ]);
 }
 
-// ---------- Helpers de horário e busca (lógica igual à versão anterior) ----------
+// ---------- Helpers de horário e busca ----------
 
 function isWorkHours() {
   const agora = new Date();
@@ -294,12 +303,11 @@ function formatBudget(size, products, searchUrl) {
   return msg;
 }
 
-// ---------- Webhook do Chatwoot (substitui o antigo webhook da Meta) ----------
+// ---------- Webhook do Chatwoot ----------
 
 app.post("/chatwoot-webhook", async (req, res) => {
   const body = req.body;
 
-  // Só nos interessa: mensagem nova, enviada pelo cliente (não privada, não nossa própria resposta)
   if (body.event !== "message_created") return res.sendStatus(200);
   if (body.message_type !== "incoming") return res.sendStatus(200);
   if (body.private) return res.sendStatus(200);
@@ -314,14 +322,13 @@ app.post("/chatwoot-webhook", async (req, res) => {
 
   const now = Date.now();
 
-  // Reset de sessão por inatividade de 24h (igual lógica anterior)
   const existing = sessions.get(conversationId);
   if (existing?.lastInteraction && now - existing.lastInteraction > 24 * 60 * 60 * 1000) {
     sessions.delete(conversationId);
   }
   let currentSession = sessions.get(conversationId);
 
-  // 🛠️ Comando manual de reset (útil pra testes) — funciona mesmo se já foi entregue ao humano
+  // 🛠️ Comando manual de reset
   if (text.toLowerCase() === "resetar") {
     sessions.delete(conversationId);
     handedOff.delete(conversationId);
@@ -330,8 +337,10 @@ app.post("/chatwoot-webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // 🛑 Se essa conversa já foi entregue para um atendente humano, o bot não responde mais nada
-  if (handedOff.has(conversationId)) {
+  // 🛑 Verifica em tempo real se já tem agente humano atribuído (resolve bug do Jaimes)
+  const assignedToHuman = handedOff.has(conversationId) || await isAssignedToHuman(conversationId);
+  if (assignedToHuman) {
+    handedOff.add(conversationId); // cacheia para evitar chamadas repetidas
     console.log(`Conversa ${conversationId} já está com atendente humano — bot ignorando.`);
     return res.sendStatus(200);
   }
@@ -353,7 +362,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         `Não consegui consultar o site agora.\n\nVeja a busca aqui:\n${searchUrl}\n\n✅ Vou passar para um atendente finalizar com você.`
       );
     }
-    await assignToTeam(conversationId, 4); // time venda pneu
+    await assignToTeam(conversationId, 4);
     await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
@@ -372,7 +381,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         "Recebi suas informações de rastreio! 📝\n\n🌙 No momento estamos fora do horário comercial. Assim que retornarmos, te responderemos primeiro!"
       );
     }
-    await assignToTeam(conversationId, 3); // time pós-venda (rastreamento também é pós-venda)
+    await assignToTeam(conversationId, 3);
     await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
@@ -388,7 +397,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
         "Entendido! Já registrei seu relato. 📝\n\n🌙 Retornaremos em breve para te auxiliar prioritariamente!"
       );
     }
-    await assignToTeam(conversationId, 3); // time pós-venda
+    await assignToTeam(conversationId, 3);
     await handoffToHuman(conversationId);
     return res.sendStatus(200);
   }
@@ -434,7 +443,7 @@ app.post("/chatwoot-webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // Escolha do menu inicial (1, 2, 3 ou 4 — ou palavra-chave)
+  // Escolha do menu inicial
   const escolha = text.toLowerCase();
 
   if (escolha === "1" || escolha.includes("comprar")) {
